@@ -1,0 +1,12 @@
+# Build outputs
+/build/
+/target/
+
+# IDE files
+/.idea/
+/.gradle/
+/out/
+
+# Logs
+*.log
+*.tmp
