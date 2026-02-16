@@ -45,6 +45,7 @@ public final class RunManager {
 
         runs.put(run.runId, run);
         registry.put(p.getUniqueId(), run.runId);
+        plugin.getLogger().info("[Registry] put " + p.getUniqueId() + " -> " + run.runId);
         playerToRun.put(p.getUniqueId(), run);
 
         plugin.getLogger().info("[Run] START runId=" + run.runId + " player=" + p.getName());

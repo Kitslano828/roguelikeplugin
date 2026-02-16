@@ -82,6 +82,7 @@ public final class SharedRunRegistry {
                     p.store(new OutputStreamWriter(out, StandardCharsets.UTF_8), "playerUUID=runUUID");
                 }
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                plugin.getLogger().info("[Registry] wrote file: " + file.toAbsolutePath() + " entries=" + p.size());
             } catch (IOException e) {
                 plugin.getLogger().severe("Failed to write registry: " + e.getMessage());
             }
