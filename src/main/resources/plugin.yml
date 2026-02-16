@@ -1,0 +1,4 @@
+name: rogue-plugin
+version: '1.0-SNAPSHOT'
+main: TomDang.example.roguePlugin.RoguePlugin
+api-version: '1.21'
