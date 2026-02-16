@@ -1,3 +1,6 @@
 servers:
   lobby: "lobby"
   dungeon: "dungeon1"
+
+sharedState:
+  registryPath: "C:/Users/Administrator/Desktop/mc-rogue-network/runs/run-registry.properties"

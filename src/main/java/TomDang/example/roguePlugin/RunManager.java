@@ -28,9 +28,11 @@ public final class RunManager {
     private final JavaPlugin plugin;
     private final Map<UUID, Run> playerToRun = new ConcurrentHashMap<>();
     private final Map<UUID, Run> runs = new ConcurrentHashMap<>();
+    private final SharedRunRegistry registry;
 
-    public RunManager(JavaPlugin plugin) {
+    public RunManager(JavaPlugin plugin, SharedRunRegistry registry) {
         this.plugin = plugin;
+        this.registry = registry;
     }
 
     public synchronized Run startRunFor(Player p) {
@@ -42,6 +44,7 @@ public final class RunManager {
         run.players.add(p.getUniqueId());
 
         runs.put(run.runId, run);
+        registry.put(p.getUniqueId(), run.runId);
         playerToRun.put(p.getUniqueId(), run);
 
         plugin.getLogger().info("[Run] START runId=" + run.runId + " player=" + p.getName());
@@ -54,6 +57,7 @@ public final class RunManager {
         if (run == null) return false;
 
         run.players.remove(pid);
+        registry.remove(pid);
 
         plugin.getLogger().info("[Run] LEAVE runId=" + run.runId + " player=" + p.getName() + " reason=" + reason);
 
@@ -81,6 +85,7 @@ public final class RunManager {
                 Run run = playerToRun.remove(pid);
                 if (run != null) {
                     run.players.remove(pid);
+                    registry.remove(pid);
                     plugin.getLogger().info("[Run] OFFLINE_REMOVE runId=" + run.runId + " playerUUID=" + pid);
                     if (run.players.isEmpty()) {
                         runs.remove(run.runId);

@@ -8,23 +8,38 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public final class RoguePlugin extends JavaPlugin {
 
     private RunManager runManager;
+    private SharedRunRegistry registry;
 
     private String lobbyServerName;
     private String dungeonServerName;
 
     @Override
     public void onEnable() {
+        // Load config.yml (and create it if missing)
         saveDefaultConfig();
         FileConfiguration cfg = getConfig();
 
         lobbyServerName = cfg.getString("servers.lobby", "lobby");
         dungeonServerName = cfg.getString("servers.dungeon", "dungeon1");
 
-        runManager = new RunManager(this);
+        // Shared registry path (shared across all instances on the laptop)
+        String registryPathStr = cfg.getString(
+                "sharedState.registryPath",
+                "C:/Users/Administrator/Desktop/mc-rogue-network/runs/run-registry.properties"
+        );
+
+        Path registryPath = Paths.get(registryPathStr);
+        registry = new SharedRunRegistry(this, registryPath);
+        registry.ensureExists();
+
+        // IMPORTANT: RunManager now takes registry
+        runManager = new RunManager(this, registry);
 
         // Needed for sending players between servers on Velocity
         getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
@@ -73,10 +88,13 @@ public final class RoguePlugin extends JavaPlugin {
             RunManager.Run run = runManager.getRun(p);
             if (run == null) {
                 p.sendMessage(ChatColor.GRAY + "No active run.");
+                // Helpful debug: proves the shared file is reachable
+                p.sendMessage(ChatColor.DARK_GRAY + "Registry entries: " + registry.size());
             } else {
                 p.sendMessage(ChatColor.YELLOW + "Run: " + run.runId);
                 p.sendMessage(ChatColor.GRAY + "Age: " + run.age().toMinutes() + "m, Players in run: " + run.players.size());
                 p.sendMessage(ChatColor.GRAY + "Active runs on this server: " + runManager.activeRuns());
+                p.sendMessage(ChatColor.DARK_GRAY + "Registry entries: " + registry.size());
             }
             return true;
         });
@@ -84,7 +102,7 @@ public final class RoguePlugin extends JavaPlugin {
         // Cleanup task (disconnects)
         Bukkit.getScheduler().runTaskTimer(this, runManager::cleanupOfflinePlayers, 20L * 10, 20L * 10);
 
-        getLogger().info("RoguePlugin enabled (Phase 2: Velocity server switching).");
+        getLogger().info("RoguePlugin enabled (Phase 2.5: shared run registry + Velocity switching).");
     }
 
     private void connectPlayerToServer(Player player, String serverName) {
