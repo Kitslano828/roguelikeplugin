@@ -70,8 +70,23 @@ public final class RunManager {
         return true;
     }
 
-    public Run getRun(Player p) {
-        return playerToRun.get(p.getUniqueId());
+    public synchronized Run getRun(Player p) {
+        UUID pid = p.getUniqueId();
+
+        Run existing = playerToRun.get(pid);
+        if (existing != null) return existing;
+
+        String runIdStr = registry.getRunId(pid);
+        if (runIdStr == null) return null;
+
+        UUID runId = UUID.fromString(runIdStr);
+
+        // Create a local view of the run on this server
+        Run run = runs.computeIfAbsent(runId, id -> new Run(id, System.currentTimeMillis()));
+        run.players.add(pid);
+        playerToRun.put(pid, run);
+
+        return run;
     }
 
     public int activeRuns() {
@@ -79,19 +94,19 @@ public final class RunManager {
     }
 
     public void cleanupOfflinePlayers() {
-        // Phase 1: If someone disconnects, remove them from run
+        // IMPORTANT:
+        // "Offline" here only means "not on THIS Paper server".
+        // In a Velocity network, that often means the player switched servers.
         for (UUID pid : new ArrayList<>(playerToRun.keySet())) {
-            Player online = Bukkit.getPlayer(pid);
-            if (online == null || !online.isOnline()) {
+            Player onlineHere = Bukkit.getPlayer(pid);
+            if (onlineHere == null || !onlineHere.isOnline()) {
                 Run run = playerToRun.remove(pid);
                 if (run != null) {
                     run.players.remove(pid);
-                    registry.remove(pid);
-                    plugin.getLogger().info("[Run] OFFLINE_REMOVE runId=" + run.runId + " playerUUID=" + pid);
-                    if (run.players.isEmpty()) {
-                        runs.remove(run.runId);
-                        plugin.getLogger().info("[Run] END runId=" + run.runId + " duration=" + run.age().toMinutes() + "m");
-                    }
+
+                    // DO NOT touch the shared registry here.
+                    // The player might be online on another server (dungeon1, etc.)
+                    plugin.getLogger().info("[Run] LOCAL_REMOVE (switch/offline) runId=" + run.runId + " playerUUID=" + pid);
                 }
             }
         }
