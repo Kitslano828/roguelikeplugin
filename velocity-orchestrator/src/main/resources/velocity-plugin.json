@@ -1,0 +1,6 @@
+{
+  "id": "rogue_orchestrator",
+  "name": "Rogue Orchestrator",
+  "version": "1.0.0",
+  "main": "TomDang.example.velocityOrchestrator.VelocityOrchestrator"
+}
