@@ -10,6 +10,13 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class InstanceManager {
     private final ProxyServer proxy;
@@ -21,6 +28,8 @@ public final class InstanceManager {
 
     // runId -> instance
     private final Map<String, Live> live = new ConcurrentHashMap<>();
+    private final Map<String, UUID> ownerByRunId = new ConcurrentHashMap<>();
+    private final Set<String> activeRunIds = ConcurrentHashMap.newKeySet();
 
     public InstanceManager(
             ProxyServer proxy,
@@ -85,6 +94,7 @@ public final class InstanceManager {
         if (l == null) return;
 
         proxy.unregisterServer(l.info);
+        markRunEnded(runId);
 
         // Best-effort delete
         CompletableFuture.runAsync(() -> {
@@ -94,4 +104,32 @@ public final class InstanceManager {
     }
 
     private record Live(String runId, String instanceId, ServerInfo info, RegisteredServer server) {}
+    public void markRunStarted(String runId, UUID owner) {
+        ownerByRunId.put(runId, owner);
+        activeRunIds.add(runId);
+    }
+
+    public void markRunEnded(String runId) {
+        activeRunIds.remove(runId);
+        ownerByRunId.remove(runId);
+    }
+
+    public List<String> getActiveRunIdsFor(UUID owner) {
+        List<String> out = new ArrayList<>();
+        for (String runId : activeRunIds) {
+            if (owner.equals(ownerByRunId.get(runId))) {
+                out.add(runId);
+            }
+        }
+        return out;
+    }
+
+    public Optional<String> getRunFor(UUID owner) {
+        for (String runId : activeRunIds) {
+            if (owner.equals(ownerByRunId.get(runId))) {
+                return Optional.of(runId);
+            }
+        }
+        return Optional.empty();
+    }
 }

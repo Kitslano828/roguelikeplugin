@@ -17,6 +17,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.List;
+import java.util.Locale;
 
 @Plugin(
         id = "rogue_orchestrator",
@@ -89,6 +91,7 @@ public final class VelocityOrchestrator {
             }
 
             String runId = UUID.randomUUID().toString();
+            instances.markRunStarted(runId, player.getUniqueId());
             player.sendMessage(Component.text("Spawning run " + runId + "..."));
 
             instances.spawnRegister(runId)
@@ -111,12 +114,36 @@ public final class VelocityOrchestrator {
 
         @Override
         public void execute(Invocation inv) {
+            // If player runs /runend with no args, end THEIR active run
             if (inv.arguments().length < 1) {
-                inv.source().sendMessage(Component.text("Usage: /runend <runId>"));
+                if (inv.source() instanceof Player p) {
+                    instances.getRunFor(p.getUniqueId()).ifPresentOrElse(runId -> {
+                        instances.cleanup(runId);
+                        p.sendMessage(Component.text("Cleanup requested for " + runId));
+                    }, () -> p.sendMessage(Component.text("No active run found for you.")));
+                } else {
+                    inv.source().sendMessage(Component.text("Usage: /runend <runId>"));
+                }
                 return;
             }
-            instances.cleanup(inv.arguments()[0]);
-            inv.source().sendMessage(Component.text("Cleanup requested."));
+
+            String runId = inv.arguments()[0];
+            instances.cleanup(runId);
+            inv.source().sendMessage(Component.text("Cleanup requested for " + runId));
+        }
+
+        @Override
+        public java.util.concurrent.CompletableFuture<List<String>> suggestAsync(Invocation inv) {
+            if (!(inv.source() instanceof Player p)) {
+                return java.util.concurrent.CompletableFuture.completedFuture(List.of());
+            }
+
+            String[] args = inv.arguments();
+            String prefix = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+
+            List<String> candidates = instances.getActiveRunIdsFor(p.getUniqueId());
+            candidates.removeIf(s -> !s.toLowerCase(Locale.ROOT).startsWith(prefix));
+            return java.util.concurrent.CompletableFuture.completedFuture(candidates);
         }
     }
 }
