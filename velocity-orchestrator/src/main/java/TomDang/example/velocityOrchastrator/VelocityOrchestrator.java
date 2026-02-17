@@ -88,9 +88,7 @@ public final class VelocityOrchestrator {
                 return;
             }
 
-            // For testing: generate runId here. Later we’ll use your real run UUID.
             String runId = UUID.randomUUID().toString();
-
             player.sendMessage(Component.text("Spawning run " + runId + "..."));
 
             instances.spawnRegister(runId)
@@ -117,9 +115,8 @@ public final class VelocityOrchestrator {
                 inv.source().sendMessage(Component.text("Usage: /runend <runId>"));
                 return;
             }
-            String runId = inv.arguments()[0];
-            instances.cleanup(runId);
-            inv.source().sendMessage(Component.text("Cleanup requested for " + runId));
+            instances.cleanup(inv.arguments()[0]);
+            inv.source().sendMessage(Component.text("Cleanup requested."));
         }
     }
 }
