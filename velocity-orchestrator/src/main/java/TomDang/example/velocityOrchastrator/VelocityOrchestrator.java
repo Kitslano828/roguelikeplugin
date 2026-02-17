@@ -11,6 +11,10 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
+import TomDang.example.velocityOrchestrator.party.PartyManager;
+import TomDang.example.velocityOrchestrator.party.PartyCommand;
+import TomDang.example.velocityOrchestrator.party.Party;
+import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 
 import com.google.inject.Inject;
 import java.nio.file.Files;
@@ -19,6 +23,8 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.List;
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.Optional;
 
 @Plugin(
         id = "rogue_orchestrator",
@@ -30,6 +36,7 @@ public final class VelocityOrchestrator {
     private final ProxyServer proxy;
     private final Logger logger;
     private final Path dataDir;
+    private PartyManager partyManager;
 
     private final Gson gson = new Gson();
     private InstanceManager instances;
@@ -58,8 +65,11 @@ public final class VelocityOrchestrator {
                 Duration.ofMillis(timeoutMs),
                 prefix
         );
+        this.partyManager = new PartyManager(Duration.ofMinutes(2)); // invite TTL
 
-        proxy.getCommandManager().register("runstart", new RunStart(instances));
+        proxy.getCommandManager().register("party", new PartyCommand(proxy, partyManager));
+
+        proxy.getCommandManager().register("runstart", new RunStart(instances, partyManager));
         proxy.getCommandManager().register("runend", new RunEnd(instances));
 
         logger.info("Rogue Orchestrator loaded. baseUrl={}", baseUrl);
@@ -79,9 +89,14 @@ public final class VelocityOrchestrator {
         return gson.fromJson(Files.readString(p), JsonObject.class);
     }
 
-    private static final class RunStart implements SimpleCommand {
+    private final class RunStart implements SimpleCommand {
         private final InstanceManager instances;
-        private RunStart(InstanceManager instances) { this.instances = instances; }
+        private final PartyManager parties;
+
+        private RunStart(InstanceManager instances, PartyManager parties) {
+            this.instances = instances;
+            this.parties = parties;
+        }
 
         @Override
         public void execute(Invocation inv) {
@@ -90,23 +105,77 @@ public final class VelocityOrchestrator {
                 return;
             }
 
+            UUID starter = player.getUniqueId();
+
+            // Determine if starter is in a party
+            var partyOpt = parties.getPartyOf(starter);
+
+            // Party rules
+            UUID partyId = null;
+            List<UUID> members = new ArrayList<>();
+            UUID ownerForListing = starter;
+
+            if (partyOpt.isPresent()) {
+                Party p = partyOpt.get();
+
+                if (!p.isLeader(starter)) {
+                    player.sendMessage(Component.text("Only the party leader can start a run."));
+                    return;
+                }
+
+                partyId = p.partyId();
+                ownerForListing = starter; // leader
+                members.addAll(List.copyOf(p.membersView())); // snapshot
+            } else {
+                members.add(starter);
+            }
+
+            // If party already has an active run, just connect everyone
+            if (partyId != null) {
+                var existingRun = instances.getRunForParty(partyId);
+                if (existingRun.isPresent()) {
+                    String runId = existingRun.get();
+                    connectAll(player, runId, members);
+                    return;
+                }
+            }
+
+            // Otherwise create a new run
             String runId = UUID.randomUUID().toString();
-            instances.markRunStarted(runId, player.getUniqueId());
-            player.sendMessage(Component.text("Spawning run " + runId + "..."));
+            instances.markRunStarted(runId, ownerForListing, partyId, members);
+
+            player.sendMessage(Component.text("Spawning run " + runId + " for " + members.size() + " player(s)..."));
 
             instances.spawnRegister(runId)
-                    .thenCompose(server -> player.createConnectionRequest(server).connect())
-                    .whenComplete((res, err) -> {
+                    .whenComplete((server, err) -> {
                         if (err != null) {
-                            player.sendMessage(Component.text("Failed: " + err.getMessage()));
+                            player.sendMessage(Component.text("Failed to spawn: " + err.getMessage()));
                             instances.cleanup(runId);
-                        } else {
-                            player.sendMessage(Component.text("Connected: " + runId));
-                            player.sendMessage(Component.text("Use /runend " + runId + " to cleanup."));
+                            return;
                         }
+                        connectAll(player, runId, members);
                     });
         }
+
+        private void connectAll(Player caller, String runId, List<UUID> members) {
+            instances.getServer(runId).ifPresentOrElse(server -> {
+                for (UUID u : members) {
+                    proxy.getPlayer(u).ifPresent(pl -> {
+                        pl.createConnectionRequest(server).connect()
+                                .whenComplete((res, err) -> {
+                                    if (err != null) {
+                                        pl.sendMessage(Component.text("Failed to connect to run: " + err.getMessage()));
+                                    } else {
+                                        pl.sendMessage(Component.text("Connected to run: " + runId));
+                                    }
+                                });
+                    });
+                }
+                caller.sendMessage(Component.text("Use /runend " + runId + " to cleanup."));
+            }, () -> caller.sendMessage(Component.text("Run server not registered yet for " + runId)));
+        }
     }
+
 
     private static final class RunEnd implements SimpleCommand {
         private final InstanceManager instances;
@@ -146,4 +215,22 @@ public final class VelocityOrchestrator {
             return java.util.concurrent.CompletableFuture.completedFuture(candidates);
         }
     }
+
+    @Subscribe
+    public void onPreConnect(ServerPreConnectEvent event) {
+        if (instances == null) return;
+
+        String target = event.getOriginalServer().getServerInfo().getName();
+        if (!instances.isRunServerName(target)) return;
+
+        Player player = event.getPlayer();
+        String runId = instances.runIdFromServerName(target).orElse(null);
+        if (runId == null) return;
+
+        if (!instances.isPlayerAllowedOnRun(player.getUniqueId(), runId)) {
+            event.setResult(ServerPreConnectEvent.ServerResult.denied());
+            player.sendMessage(Component.text("You are not allowed to join that dungeon run."));
+        }
+    }
+
 }
