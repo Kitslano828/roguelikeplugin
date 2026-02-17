@@ -7,16 +7,8 @@ import com.velocitypowered.api.proxy.server.ServerInfo;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class InstanceManager {
     private final ProxyServer proxy;
@@ -28,8 +20,16 @@ public final class InstanceManager {
 
     // runId -> instance
     private final Map<String, Live> live = new ConcurrentHashMap<>();
+
+    // Owner (leader/solo starter) for listing
     private final Map<String, UUID> ownerByRunId = new ConcurrentHashMap<>();
     private final Set<String> activeRunIds = ConcurrentHashMap.newKeySet();
+
+    // NEW: bindings for gating + party runs
+    private final Map<UUID, String> runByPlayer = new ConcurrentHashMap<>();
+    private final Map<UUID, String> runByParty  = new ConcurrentHashMap<>();
+    private final Map<String, UUID> partyByRunId = new ConcurrentHashMap<>();
+    private final Map<String, Set<UUID>> membersByRunId = new ConcurrentHashMap<>();
 
     public InstanceManager(
             ProxyServer proxy,
@@ -45,6 +45,55 @@ public final class InstanceManager {
         this.serverNamePrefix = serverNamePrefix;
     }
 
+    // === Helpers for run server naming ===
+    public boolean isRunServerName(String serverName) {
+        return serverName != null && serverName.startsWith(serverNamePrefix);
+    }
+
+    public Optional<String> runIdFromServerName(String serverName) {
+        if (!isRunServerName(serverName)) return Optional.empty();
+        return Optional.of(serverName.substring(serverNamePrefix.length()));
+    }
+
+    // === Lookup ===
+    public Optional<String> getRunForParty(UUID partyId) {
+        return Optional.ofNullable(runByParty.get(partyId));
+    }
+
+    public Optional<String> getRunForPlayer(UUID player) {
+        return Optional.ofNullable(runByPlayer.get(player));
+    }
+
+    public boolean isPlayerAllowedOnRun(UUID player, String runId) {
+        return runId != null && runId.equals(runByPlayer.get(player));
+    }
+
+    // === Start/bind run ===
+    // Keep old signature (solo/backwards compatibility)
+    public void markRunStarted(String runId, UUID owner) {
+        markRunStarted(runId, owner, null, List.of(owner));
+    }
+
+    // New signature used by party-aware /runstart
+    public void markRunStarted(String runId, UUID owner, UUID partyIdOrNull, Collection<UUID> members) {
+        ownerByRunId.put(runId, owner);
+        activeRunIds.add(runId);
+
+        if (partyIdOrNull != null) {
+            runByParty.put(partyIdOrNull, runId);
+            partyByRunId.put(runId, partyIdOrNull);
+        }
+
+        Set<UUID> set = ConcurrentHashMap.newKeySet();
+        set.addAll(members);
+        membersByRunId.put(runId, set);
+
+        for (UUID m : members) {
+            runByPlayer.put(m, runId);
+        }
+    }
+
+    // === Spawn/register ===
     public CompletableFuture<RegisteredServer> spawnRegister(String runId) {
         Live existing = live.get(runId);
         if (existing != null) return CompletableFuture.completedFuture(existing.server);
@@ -89,14 +138,26 @@ public final class InstanceManager {
         return l == null ? Optional.empty() : Optional.of(l.server);
     }
 
+    // === Cleanup ===
     public void cleanup(String runId) {
         Live l = live.remove(runId);
+
+        // Unbind members even if server wasn't live
+        Set<UUID> members = membersByRunId.remove(runId);
+        if (members != null) {
+            for (UUID m : members) runByPlayer.remove(m, runId);
+        }
+
+        // Unbind party
+        UUID partyId = partyByRunId.remove(runId);
+        if (partyId != null) runByParty.remove(partyId, runId);
+
+        markRunEnded(runId);
+
         if (l == null) return;
 
         proxy.unregisterServer(l.info);
-        markRunEnded(runId);
 
-        // Best-effort delete
         CompletableFuture.runAsync(() -> {
             try { orch.delete(l.instanceId); }
             catch (Exception ignored) {}
@@ -104,10 +165,6 @@ public final class InstanceManager {
     }
 
     private record Live(String runId, String instanceId, ServerInfo info, RegisteredServer server) {}
-    public void markRunStarted(String runId, UUID owner) {
-        ownerByRunId.put(runId, owner);
-        activeRunIds.add(runId);
-    }
 
     public void markRunEnded(String runId) {
         activeRunIds.remove(runId);
@@ -117,18 +174,15 @@ public final class InstanceManager {
     public List<String> getActiveRunIdsFor(UUID owner) {
         List<String> out = new ArrayList<>();
         for (String runId : activeRunIds) {
-            if (owner.equals(ownerByRunId.get(runId))) {
-                out.add(runId);
-            }
+            if (owner.equals(ownerByRunId.get(runId))) out.add(runId);
         }
         return out;
     }
 
+    // owner-based "their run" (leader-only start makes this fine)
     public Optional<String> getRunFor(UUID owner) {
         for (String runId : activeRunIds) {
-            if (owner.equals(ownerByRunId.get(runId))) {
-                return Optional.of(runId);
-            }
+            if (owner.equals(ownerByRunId.get(runId))) return Optional.of(runId);
         }
         return Optional.empty();
     }

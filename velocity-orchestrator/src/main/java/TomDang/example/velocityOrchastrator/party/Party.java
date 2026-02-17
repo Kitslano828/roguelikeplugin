@@ -1,4 +1,4 @@
-package TomDang.example.velocityOrchestrator.partyu;
+package TomDang.example.velocityOrchestrator.party;
 
 import java.util.Collections;
 import java.util.Set;
