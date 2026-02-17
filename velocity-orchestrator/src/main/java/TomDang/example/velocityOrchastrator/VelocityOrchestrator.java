@@ -12,7 +12,7 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
 
-import javax.inject.Inject;
+import com.google.inject.Inject;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
