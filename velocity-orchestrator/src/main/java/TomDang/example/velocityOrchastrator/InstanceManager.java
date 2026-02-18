@@ -186,4 +186,9 @@ public final class InstanceManager {
         }
         return Optional.empty();
     }
+
+    public Optional<Set<UUID>> getMembersForRun(String runId) {
+        Set<UUID> s = membersByRunId.get(runId);
+        return s == null ? Optional.empty() : Optional.of(Set.copyOf(s));
+    }
 }

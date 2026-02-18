@@ -2,5 +2,5 @@
   "orchestratorBaseUrl": "http://127.0.0.1:9001",
   "pollIntervalMs": 500,
   "spawnTimeoutMs": 40000,
-  "serverNamePrefix": "run-"
+  "serverNamePrefix": "run-",
 }

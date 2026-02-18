@@ -1,0 +1,19 @@
+name: RoguePlugin
+version: 1.0
+main: TomDang.example.roguePlugin.RoguePlugin
+api-version: "1.21"
+commands:
+  rogueping:
+    description: Test command
+    usage: /rogueping
+  start:
+    description:
+      Start a roguelike run (phase 1: just state)
+    usage: /start
+  lobby:
+    description:
+      Leave your run and return to lobby (phase 1: just state)
+    usage: /lobby
+  run:
+    description: Show your current run status
+    usage: /run

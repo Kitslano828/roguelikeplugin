@@ -40,6 +40,7 @@ public final class VelocityOrchestrator {
 
     private final Gson gson = new Gson();
     private InstanceManager instances;
+    private RunRegistry registry;
 
     @Inject
     public VelocityOrchestrator(ProxyServer proxy, Logger logger, @DataDirectory Path dataDir) {
@@ -58,6 +59,9 @@ public final class VelocityOrchestrator {
         long timeoutMs = cfg.get("spawnTimeoutMs").getAsLong();
         String prefix = cfg.get("serverNamePrefix").getAsString();
 
+        String regPath = cfg.get("runRegistryPath").getAsString();
+        this.registry = new RunRegistry(Path.of(regPath));
+
         this.instances = new InstanceManager(
                 proxy,
                 new OrchestratorClient(baseUrl),
@@ -70,7 +74,7 @@ public final class VelocityOrchestrator {
         proxy.getCommandManager().register("party", new PartyCommand(proxy, partyManager));
 
         proxy.getCommandManager().register("runstart", new RunStart(instances, partyManager));
-        proxy.getCommandManager().register("runend", new RunEnd(instances));
+        proxy.getCommandManager().register("runend", new RunEnd(instances, registry));
 
         logger.info("Rogue Orchestrator loaded. baseUrl={}", baseUrl);
     }
@@ -83,6 +87,8 @@ public final class VelocityOrchestrator {
             cfg.addProperty("pollIntervalMs", 500);
             cfg.addProperty("spawnTimeoutMs", 40000);
             cfg.addProperty("serverNamePrefix", "run-");
+            cfg.addProperty("runRegistryPath",
+                    "C:\\mc-rogue-network\\shared\\run-registry.properties");
             Files.writeString(p, gson.toJson(cfg));
             return cfg;
         }
@@ -143,6 +149,14 @@ public final class VelocityOrchestrator {
             // Otherwise create a new run
             String runId = UUID.randomUUID().toString();
             instances.markRunStarted(runId, ownerForListing, partyId, members);
+            try {
+                registry.bindPlayers(members, runId);
+            } catch (Exception e) {
+                player.sendMessage(Component.text("Failed to write run registry."));
+                instances.cleanup(runId);
+                return;
+            }
+
 
             player.sendMessage(Component.text("Spawning run " + runId + " for " + members.size() + " player(s)..."));
 
@@ -179,14 +193,23 @@ public final class VelocityOrchestrator {
 
     private static final class RunEnd implements SimpleCommand {
         private final InstanceManager instances;
-        private RunEnd(InstanceManager instances) { this.instances = instances; }
+        private final RunRegistry registry;
+
+        private RunEnd(InstanceManager instances, RunRegistry registry) {
+            this.instances = instances;
+            this.registry = registry;
+        }
 
         @Override
         public void execute(Invocation inv) {
-            // If player runs /runend with no args, end THEIR active run
             if (inv.arguments().length < 1) {
                 if (inv.source() instanceof Player p) {
                     instances.getRunFor(p.getUniqueId()).ifPresentOrElse(runId -> {
+                        instances.getMembersForRun(runId).ifPresent(members -> {
+                            try {
+                                registry.unbindPlayers(members);
+                            } catch (Exception ignored) {}
+                        });
                         instances.cleanup(runId);
                         p.sendMessage(Component.text("Cleanup requested for " + runId));
                     }, () -> p.sendMessage(Component.text("No active run found for you.")));
@@ -197,6 +220,11 @@ public final class VelocityOrchestrator {
             }
 
             String runId = inv.arguments()[0];
+            instances.getMembersForRun(runId).ifPresent(members -> {
+                try {
+                    registry.unbindPlayers(members);
+                } catch (Exception ignored) {}
+            });
             instances.cleanup(runId);
             inv.source().sendMessage(Component.text("Cleanup requested for " + runId));
         }
