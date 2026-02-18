@@ -1,4 +1,4 @@
-package TomDang.example.velocityOrchastrator;
+package TomDang.example.velocityOrchestrator;
 
 // The constants are replaced before compilation
 public class BuildConstants {

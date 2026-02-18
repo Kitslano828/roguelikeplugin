@@ -30,6 +30,8 @@ public final class InstanceManager {
     private final Map<UUID, String> runByParty  = new ConcurrentHashMap<>();
     private final Map<String, UUID> partyByRunId = new ConcurrentHashMap<>();
     private final Map<String, Set<UUID>> membersByRunId = new ConcurrentHashMap<>();
+    private final Map<UUID, String> creatingRunByOwner = new ConcurrentHashMap<>();
+    private final Map<UUID, String> creatingRunByParty = new ConcurrentHashMap<>();
 
     public InstanceManager(
             ProxyServer proxy,
@@ -140,6 +142,8 @@ public final class InstanceManager {
 
     // === Cleanup ===
     public void cleanup(String runId) {
+        clearCreateLockForRun(runId);
+
         Live l = live.remove(runId);
 
         // Unbind members even if server wasn't live
@@ -191,4 +195,50 @@ public final class InstanceManager {
         Set<UUID> s = membersByRunId.get(runId);
         return s == null ? Optional.empty() : Optional.of(Set.copyOf(s));
     }
+
+    public Optional<String> getCreatingRunForOwner(UUID owner) {
+        return Optional.ofNullable(creatingRunByOwner.get(owner));
+    }
+
+    public Optional<String> getCreatingRunForParty(UUID partyId) {
+        return Optional.ofNullable(creatingRunByParty.get(partyId));
+    }
+
+    /**
+     * Atomically reserves creation for this owner/party.
+     * Returns false if owner/party already has a creating run or an active run.
+     */
+    public boolean tryBeginCreate(String runId, UUID owner, UUID partyIdOrNull) {
+        // If already active, deny
+        if (getRunFor(owner).isPresent()) return false;
+        if (partyIdOrNull != null && runByParty.containsKey(partyIdOrNull)) return false;
+
+        // Owner creating lock
+        if (creatingRunByOwner.putIfAbsent(owner, runId) != null) return false;
+
+        // Party creating lock + rollback owner lock if party locked
+        if (partyIdOrNull != null) {
+            if (creatingRunByParty.putIfAbsent(partyIdOrNull, runId) != null) {
+                creatingRunByOwner.remove(owner, runId);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Clears creation locks (call on success OR failure). */
+    public void clearCreateLock(String runId, UUID ownerOrNull, UUID partyIdOrNull) {
+        if (ownerOrNull != null) creatingRunByOwner.remove(ownerOrNull, runId);
+        if (partyIdOrNull != null) creatingRunByParty.remove(partyIdOrNull, runId);
+    }
+
+    /** Convenience: clear lock by runId using current bindings if present. */
+    public void clearCreateLockForRun(String runId) {
+        UUID owner = ownerByRunId.get(runId);
+        UUID party = partyByRunId.get(runId);
+
+        if (owner != null) creatingRunByOwner.remove(owner, runId);
+        if (party != null) creatingRunByParty.remove(party, runId);
+    }
+
 }

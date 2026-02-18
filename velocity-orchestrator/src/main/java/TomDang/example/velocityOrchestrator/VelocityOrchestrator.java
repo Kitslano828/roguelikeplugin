@@ -136,7 +136,7 @@ public final class VelocityOrchestrator {
                 members.add(starter);
             }
 
-            // If party already has an active run, just connect everyone
+            // 1) If party already has an ACTIVE run, connect everyone
             if (partyId != null) {
                 var existingRun = instances.getRunForParty(partyId);
                 if (existingRun.isPresent()) {
@@ -144,18 +144,49 @@ public final class VelocityOrchestrator {
                     connectAll(player, runId, members);
                     return;
                 }
+
+                // If the party has a CREATING run, deny spam (or you could "please wait")
+                var creatingRun = instances.getCreatingRunForParty(partyId);
+                if (creatingRun.isPresent()) {
+                    player.sendMessage(Component.text("A run is already being created for your party. Please wait..."));
+                    return;
+                }
+            } else {
+                // 2) SOLO/LEADER: if already ACTIVE, connect them
+                var existingRun = instances.getRunFor(starter);
+                if (existingRun.isPresent()) {
+                    connectAll(player, existingRun.get(), List.of(starter));
+                    return;
+                }
+
+                // If SOLO is already creating a run, deny spam
+                var creatingRun = instances.getCreatingRunForOwner(starter);
+                if (creatingRun.isPresent()) {
+                    player.sendMessage(Component.text("A run is already being created for you. Please wait..."));
+                    return;
+                }
             }
 
-            // Otherwise create a new run
+            // Otherwise create a new run (with anti-spam lock)
             String runId = UUID.randomUUID().toString();
+
+            // 3) Atomic create gate
+            if (!instances.tryBeginCreate(runId, ownerForListing, partyId)) {
+                player.sendMessage(Component.text("You already have a run creating or active. Please wait or /runend."));
+                return;
+            }
+
+            // Bind run state in memory (so join protection works)
             instances.markRunStarted(runId, ownerForListing, partyId, members);
+
             try {
                 registry.bindPlayers(members, runId);
             } catch (Exception e) {
                 player.sendMessage(Component.text("Failed to write run registry."));
-                instances.cleanup(runId);
+                instances.cleanup(runId); // cleanup will also clear create-lock
                 return;
             }
+
 
 
             player.sendMessage(Component.text("Spawning run " + runId + " for " + members.size() + " player(s)..."));
@@ -164,9 +195,13 @@ public final class VelocityOrchestrator {
                     .whenComplete((server, err) -> {
                         if (err != null) {
                             player.sendMessage(Component.text("Failed to spawn: " + err.getMessage()));
-                            instances.cleanup(runId);
+                            instances.cleanup(runId); // clears lock + unbinds
                             return;
                         }
+
+                        //creation finished successfully, clear creating-lock
+                        instances.clearCreateLockForRun(runId);
+
                         connectAll(player, runId, members);
                     });
         }
