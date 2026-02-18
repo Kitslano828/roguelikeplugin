@@ -64,10 +64,10 @@ public final class RoguePlugin extends JavaPlugin {
         );
 
         // Register join/quit listener for stats
-                getServer().getPluginManager().registerEvents(
-                        new StatsListener(statsService),
-                        this
-                );
+        getServer().getPluginManager().registerEvents(
+                new StatsListener(statsService, this),
+                this
+        );
 
         // Register /stats command (testing & admin)
                 getCommand("stats").setExecutor(new StatsCommand(statsService));

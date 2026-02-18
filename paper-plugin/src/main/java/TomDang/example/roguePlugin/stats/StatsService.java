@@ -42,21 +42,30 @@ public final class StatsService {
         PlayerProfile prof = cache.get(player.getUniqueId());
         if (prof == null) return;
 
-        double maxHealth = prof.effective(StatId.MAX_HEALTH, dungeonMode);
-        double shield    = prof.effective(StatId.SHIELD, dungeonMode);
+        double oldMax = player.getMaxHealth();
+        double oldHealth = player.getHealth();
 
-        // Apply health cap
-        player.setMaxHealth(maxHealth);
-        
-        if (player.getHealth() > maxHealth) player.setHealth(maxHealth);
+        double newMax = prof.effective(StatId.MAX_HEALTH, dungeonMode);
+        double shield = prof.effective(StatId.SHIELD, dungeonMode);
 
-        // Apply shield as absorption hearts
+        // Set max
+        player.setMaxHealth(newMax);
+
+        // Keep same % health when max changes
+        if (oldMax > 0) {
+            double pct = oldHealth / oldMax;
+            double newHealth = Math.max(1.0, Math.min(newMax, pct * newMax));
+            player.setHealth(newHealth);
+        } else {
+            player.setHealth(Math.min(oldHealth, newMax));
+        }
+
         player.setAbsorptionAmount(shield);
 
-        // Mana is your own system (we keep it in PlayerProfile.currentMana for now)
         double maxMana = prof.effective(StatId.MANA, dungeonMode);
         if (prof.currentMana > maxMana) prof.currentMana = maxMana;
     }
+
 
     public PlayerProfile get(UUID uuid) {
         return cache.get(uuid);

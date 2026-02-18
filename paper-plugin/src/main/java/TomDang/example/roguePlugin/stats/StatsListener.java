@@ -1,17 +1,21 @@
 package TomDang.example.roguePlugin.stats;
 
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.plugin.Plugin;
 
 public final class StatsListener implements Listener {
     private final StatsService stats;
+    private final Plugin plugin;
 
-    public StatsListener(StatsService stats) {
+    public StatsListener(StatsService stats, Plugin plugin) {
         this.stats = stats;
+        this.plugin = plugin;
     }
 
     @EventHandler
@@ -20,14 +24,15 @@ public final class StatsListener implements Listener {
 
         stats.load(p.getUniqueId()).whenComplete((profile, err) -> {
             if (err != null) {
-                p.kick(Component.text("Failed to load profile."));
+                Bukkit.getScheduler().runTask(plugin, () ->
+                        p.kick(Component.text("Failed to load profile.")));
                 return;
             }
-            // Apply on main thread
-            org.bukkit.Bukkit.getScheduler().runTask(
-                    org.bukkit.plugin.java.JavaPlugin.getProvidingPlugin(getClass()),
-                    () -> stats.apply(p)
-            );
+
+            // Apply AFTER join init finishes
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                stats.apply(p);
+            }, 2L); // 2 ticks is usually enough
         });
     }
 
