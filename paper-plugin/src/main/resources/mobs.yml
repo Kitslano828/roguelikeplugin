@@ -1,0 +1,16 @@
+mobs:
+  zombie_basic:
+    MAX_HEALTH: 40
+    SHIELD: 0
+    STRENGTH: 8
+    MAGIC: 0
+    MANA: 0
+    MANA_REGEN: 0
+
+  skeleton_basic:
+    MAX_HEALTH: 28
+    SHIELD: 0
+    STRENGTH: 10
+    MAGIC: 0
+    MANA: 0
+    MANA_REGEN: 0
