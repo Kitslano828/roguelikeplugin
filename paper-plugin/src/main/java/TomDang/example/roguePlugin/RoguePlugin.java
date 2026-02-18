@@ -5,6 +5,10 @@ import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import TomDang.example.roguePlugin.stats.StatsService;
+import TomDang.example.roguePlugin.stats.StatsListener;
+import TomDang.example.roguePlugin.stats.StatsCommand;
+
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -15,6 +19,7 @@ public final class RoguePlugin extends JavaPlugin {
 
     private RunManager runManager;
     private SharedRunRegistry registry;
+    private StatsService statsService;
 
     private String lobbyServerName;
     private String dungeonServerName;
@@ -43,6 +48,30 @@ public final class RoguePlugin extends JavaPlugin {
 
         // Needed for sending players between servers on Velocity
         getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
+
+        // ===== Player Stats System =====
+        String playerDataDirStr = cfg.getString(
+                "sharedState.playerDataDir",
+                "C:/Users/Administrator/Desktop/mc-rogue-network/shared/playerdata"
+        );
+
+        boolean dungeonMode = cfg.getString("serverRole", "lobby")
+                .equalsIgnoreCase("dungeon");
+
+        statsService = new StatsService(
+                Paths.get(playerDataDirStr),
+                dungeonMode
+        );
+
+        // Register join/quit listener for stats
+                getServer().getPluginManager().registerEvents(
+                        new StatsListener(statsService),
+                        this
+                );
+
+        // Register /stats command (testing & admin)
+                getCommand("stats").setExecutor(new StatsCommand(statsService));
+
 
         // /start -> start run state, then send to dungeon server
         getCommand("start").setExecutor((sender, command, label, args) -> {

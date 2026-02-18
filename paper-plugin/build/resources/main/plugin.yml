@@ -17,3 +17,5 @@ commands:
   run:
     description: Show your current run status
     usage: /run
+  stats:
+    description: View and modify player stats

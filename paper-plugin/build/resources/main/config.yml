@@ -4,3 +4,7 @@ servers:
 
 sharedState:
   registryPath: "C:/Users/Administrator/Desktop/mc-rogue-network/runs/run-registry.properties"
+
+  playerDataDir: "C:\\mc-rogue-network\\shared\\playerdata"
+
+  serverRole: "lobby" # lobby | dungeon
