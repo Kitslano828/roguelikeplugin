@@ -7,4 +7,10 @@ sharedState:
 
   playerDataDir: "C:\\mc-rogue-network\\shared\\playerdata"
 
+  # NEW: shared lease file (must be accessible by ALL instances)
+  playerLeasePath: "C:\\mc-rogue-network\\shared\\player-leases.properties"
+
+  # NEW: lease settings
+  leaseDurationSeconds: 45
+
   serverRole: "lobby" # lobby | dungeon

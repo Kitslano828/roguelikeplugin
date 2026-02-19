@@ -1,0 +1,20 @@
+plugins {
+    id 'java'
+}
+
+group = 'TomDang.example'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // keep this empty/minimal; it's an API module
+}

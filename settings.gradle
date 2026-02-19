@@ -1,2 +1,2 @@
 rootProject.name = 'rogue-plugin'
-include("paper-plugin", "velocity-orchestrator")
+include("paper-plugin", "velocity-orchestrator", "rogue-api")

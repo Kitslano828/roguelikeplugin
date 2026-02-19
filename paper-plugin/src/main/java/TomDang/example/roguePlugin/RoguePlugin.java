@@ -12,12 +12,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 
 public final class RoguePlugin extends JavaPlugin {
 
     private RunManager runManager;
     private SharedRunRegistry registry;
     private StatsService statsService;
+    private PlayerLeaseService leaseService;
 
     private String lobbyServerName;
     private String dungeonServerName;
@@ -31,6 +33,18 @@ public final class RoguePlugin extends JavaPlugin {
         saveResource("mobs.yml", false);
 
         FileConfiguration cfg = getConfig();
+
+        String serverId = cfg.getString("server.id", "unknown-server");
+
+        String leasePathStr = cfg.getString(
+                "sharedState.playerLeasePath",
+                "C:\\mc-rogue-network\\shared\\player-leases.properties"
+        );
+
+        long leaseSeconds = cfg.getLong("sharedState.leaseDurationSeconds", 45);
+        leaseService = new PlayerLeaseService(Paths.get(leasePathStr), serverId, leaseSeconds * 1000L);
+        leaseService.ensureExists();
+
 
         lobbyServerName = cfg.getString("servers.lobby", "lobby");
         dungeonServerName = cfg.getString("servers.dungeon", "dungeon1");
@@ -172,6 +186,17 @@ public final class RoguePlugin extends JavaPlugin {
         } else {
             getLogger().severe("Command run missing from plugin.yml");
         }
+
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            // refresh at most N per tick so it can't lag
+            for (UUID id : statsService.drainDirtyPlayers(50)) {
+                Player p = Bukkit.getPlayer(id);
+                if (p != null && p.isOnline()) {
+                    statsService.apply(p);
+                }
+            }
+        }, 10L, 10L); // every 10 ticks
+
 
         // Cleanup task (disconnects)
         Bukkit.getScheduler().runTaskTimer(this, runManager::cleanupOfflinePlayers, 20L * 10, 20L * 10);

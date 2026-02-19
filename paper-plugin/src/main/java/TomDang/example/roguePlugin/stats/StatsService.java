@@ -13,6 +13,7 @@ public final class StatsService {
     private final ExecutorService ioPool = Executors.newFixedThreadPool(2);
     private final Map<UUID, PlayerProfile> cache = new ConcurrentHashMap<>();
     private final List<StatsProvider> providers = new CopyOnWriteArrayList<>();
+    private final Set<UUID> dirtyPlayers = ConcurrentHashMap.newKeySet();
 
     private volatile boolean dungeonMode;
 
@@ -136,4 +137,20 @@ public final class StatsService {
             }
         }
     }
+
+    public void markDirty(UUID playerId) {
+        dirtyPlayers.add(playerId);
+    }
+
+    public Set<UUID> drainDirtyPlayers(int max) {
+        Set<UUID> out = new HashSet<>();
+        Iterator<UUID> it = dirtyPlayers.iterator();
+        while (it.hasNext() && out.size() < max) {
+            UUID id = it.next();
+            it.remove();
+            out.add(id);
+        }
+        return out;
+    }
+
 }
