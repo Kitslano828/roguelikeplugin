@@ -71,8 +71,9 @@ public final class RoguePlugin extends JavaPlugin {
                 "C:/Users/Administrator/Desktop/mc-rogue-network/shared/playerdata"
         );
 
-        boolean dungeonMode = cfg.getString("serverRole", "lobby")
+        boolean dungeonMode = cfg.getString("sharedState.serverRole", "lobby")
                 .equalsIgnoreCase("dungeon");
+
 
         statsService = new StatsService(
                 Paths.get(playerDataDirStr),
@@ -81,9 +82,10 @@ public final class RoguePlugin extends JavaPlugin {
 
         // Register join/quit listener for stats
         getServer().getPluginManager().registerEvents(
-                new StatsListener(statsService, this),
+                new StatsListener(statsService, leaseService, this),
                 this
         );
+
 
         // Register /stats command (testing & admin)
         if (getCommand("stats") != null) {

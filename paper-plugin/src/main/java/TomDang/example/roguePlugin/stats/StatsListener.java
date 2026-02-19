@@ -35,7 +35,7 @@ public final class StatsListener implements Listener {
             if (err != null) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     leases.release(p.getUniqueId());
-                    p.kick(Component.text("Failed to load profile.")));
+                    p.kick(Component.text("Failed to load profile."));
                 });
                 return;
             }
