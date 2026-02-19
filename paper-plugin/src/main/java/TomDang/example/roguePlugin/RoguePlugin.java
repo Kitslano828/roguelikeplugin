@@ -85,7 +85,10 @@ public final class RoguePlugin extends JavaPlugin {
                 new StatsListener(statsService, leaseService, this),
                 this
         );
-
+        getServer().getPluginManager().registerEvents(
+                new TomDang.example.roguePlugin.combat.VanillaCombatBlockerListener(),
+                this
+        );
 
         // Register /stats command (testing & admin)
         if (getCommand("stats") != null) {
