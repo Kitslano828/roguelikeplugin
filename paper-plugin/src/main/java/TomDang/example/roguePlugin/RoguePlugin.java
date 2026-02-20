@@ -1,5 +1,6 @@
 package TomDang.example.roguePlugin;
 
+import TomDang.example.roguePlugin.combat.CombatServiceImpl;
 import TomDang.example.roguePlugin.mobs.*;
 import TomDang.example.roguePlugin.stats.*;
 import org.bukkit.Bukkit;
@@ -80,6 +81,31 @@ public final class RoguePlugin extends JavaPlugin {
                 dungeonMode
         );
 
+        boolean combatEnabled = cfg.getBoolean("combat.enabled", false);
+
+        if (combatEnabled) {
+            CombatServiceImpl combatService = new CombatServiceImpl(statsService);
+
+            getServer().getPluginManager().registerEvents(
+                    new TomDang.example.roguePlugin.combat.CombatListener(combatService),
+                    this
+            );
+
+            // Optional: you can REMOVE VanillaCombatBlockerListener entirely,
+            // because CombatListener already cancels hits.
+            // If you want to keep it for environmental damage/regeneration suppression,
+            // register it only when combatEnabled is true:
+            getServer().getPluginManager().registerEvents(
+                    new TomDang.example.roguePlugin.combat.VanillaCombatBlockerListener(),
+                    this
+            );
+
+            getLogger().info("Combat enabled: custom engine v0 active");
+        } else {
+            getLogger().info("Combat disabled: vanilla combat active");
+        }
+
+
         // Register join/quit listener for stats
         getServer().getPluginManager().registerEvents(
                 new StatsListener(statsService, leaseService, this),
@@ -102,6 +128,8 @@ public final class RoguePlugin extends JavaPlugin {
 
         // Mob template provider contributes stats to tagged mobs
         statsService.registerProvider(new MobTemplateStatsProvider(this));
+
+
 
         // Mob health display (number + ❤)
         getServer().getPluginManager().registerEvents(new MobHealthDisplayListener(this), this);
